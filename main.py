@@ -1,3 +1,4 @@
+
 import logging
 import asyncio
 import csv
@@ -101,13 +102,24 @@ async def process(chat_id: int, users: list, msg: Message):
         stats[result] = stats.get(result, 0) + 1
         
         if result == 'peer_flood':
-            await msg.answer("🚫 PeerFlood! Остановка. Повторите через 24 часа.")
+            await msg.answer(
+                "🚫 <b>Обнаружен PeerFlood!</b>\n\n"
+                "❌ Процесс автоматически остановлен\n"
+                "⏰ Повторите попытку через 24 часа\n"
+                "💡 Рекомендуем увеличить задержки между добавлениями",
+                parse_mode='HTML'
+            )
             break
         
-        # Progress update every 10 users
         if idx % 10 == 0:
             progress = (idx / total) * 100
-            await msg.answer(f"⏳ Прогресс: {idx}/{total} ({progress:.1f}%)\n✅ Добавлено: {stats['success']}")
+            await msg.answer(
+                f"⚡️ <b>Обработка в процессе...</b>\n\n"
+                f"📊 Прогресс: <code>{idx}/{total}</code> ({progress:.1f}%)\n"
+                f"✅ Успешно добавлено: <b>{stats['success']}</b>\n"
+                f"⏱ Продолжаем работу...",
+                parse_mode='HTML'
+            )
         
         if idx % BATCH_SIZE == 0:
             await asyncio.sleep(DELAY_BATCH)
@@ -117,7 +129,6 @@ async def process(chat_id: int, users: list, msg: Message):
     end_time = datetime.now()
     duration = (end_time - start_time).total_seconds()
     
-    # Save to history
     stats_history[chat_id] = {
         'date': end_time.strftime('%Y-%m-%d %H:%M:%S'),
         'stats': stats,
@@ -126,33 +137,51 @@ async def process(chat_id: int, users: list, msg: Message):
         'duration': duration
     }
     
-    report = f"""📊 Отчёт завершён
-
-✅ Успешно: {stats['success']}
-⏳ FloodWait: {stats['flood']}
-🔒 Приватность: {stats['privacy']}
-👤 Не в контактах: {stats['not_contact']}
-📊 Много групп: {stats['too_many_groups']}
-🚫 Забанены: {stats['banned']}
-❌ Ошибки: {stats['error']}
-
-Обработано: {idx}/{total}
-⏱ Время: {int(duration // 60)}м {int(duration % 60)}с
-📈 Скорость: {stats['success'] / (duration / 60):.1f} польз/мин"""
+    success_rate = (stats['success'] / idx * 100) if idx > 0 else 0
     
-    await msg.answer(report)
+    report = f"""
+🎉 <b>Операция завершена!</b>
+
+━━━━━━━━━━━━━━━━━━━━
+📈 <b>РЕЗУЛЬТАТЫ</b>
+━━━━━━━━━━━━━━━━━━━━
+
+✅ <b>Успешно:</b> {stats['success']} ({success_rate:.1f}%)
+⏳ <b>FloodWait:</b> {stats['flood']}
+🔒 <b>Настройки приватности:</b> {stats['privacy']}
+👤 <b>Не в контактах:</b> {stats['not_contact']}
+📊 <b>Превышен лимит групп:</b> {stats['too_many_groups']}
+🚫 <b>Заблокированы:</b> {stats['banned']}
+❌ <b>Другие ошибки:</b> {stats['error']}
+
+━━━━━━━━━━━━━━━━━━━━
+📋 <b>ОБЩАЯ ИНФОРМАЦИЯ</b>
+━━━━━━━━━━━━━━━━━━━━
+
+👥 Обработано: <b>{idx}</b> из {total}
+⏱ Затраченное время: <b>{int(duration // 60)}м {int(duration % 60)}с</b>
+⚡️ Средняя скорость: <b>{stats['success'] / (duration / 60):.1f}</b> польз/мин
+
+━━━━━━━━━━━━━━━━━━━━
+
+💾 Используйте /stats для просмотра детальной статистики
+"""
+    
+    await msg.answer(report, parse_mode='HTML')
     log.info(report)
     is_running[chat_id] = False
     
-    # Export failed users
     await export_failed_users(chat_id, users, stats, msg)
 
 async def export_failed_users(chat_id: int, users: list, stats: dict, msg: Message):
-    """Export list of users who weren't added successfully"""
     failed_count = stats['privacy'] + stats['not_contact'] + stats['too_many_groups'] + stats['banned'] + stats['error']
     
     if failed_count > 0:
-        await msg.answer(f"💾 Экспорт неудачных попыток... ({failed_count} польз.)")
+        await msg.answer(
+            f"💾 <b>Экспорт неудачных попыток...</b>\n\n"
+            f"📁 Сохранено <code>{failed_count}</code> пользователей",
+            parse_mode='HTML'
+        )
 
 @dp.message(Command('start'))
 async def start(msg: Message):
@@ -162,19 +191,23 @@ async def start(msg: Message):
     ])
     
     await msg.answer(
-        "👋 *Бот для добавления пользователей в группы*\n\n"
-        "🚀 *Быстрый старт:*\n"
-        "1. Добавьте бота в группу как администратора\n"
-        "2. Отправьте файл users.txt или users.csv\n"
-        "3. Используйте /add\\_users для начала\n\n"
-        "📋 *Команды:*\n"
-        "/add\\_users - Начать добавление\n"
-        "/stop - Остановить процесс\n"
-        "/status - Текущий статус\n"
-        "/stats - История операций\n"
-        "/preview - Просмотр файла\n"
-        "/settings - Настройки",
-        parse_mode='Markdown',
+        "👋 <b>Добро пожаловать в бот массового добавления!</b>\n\n"
+        "🚀 <b>Быстрый старт за 3 шага:</b>\n\n"
+        "1️⃣ Добавьте бота в вашу группу с правами администратора\n"
+        "2️⃣ Отправьте файл с пользователями (users.txt или users.csv)\n"
+        "3️⃣ Запустите процесс командой /add_users\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "📋 <b>Основные команды:</b>\n\n"
+        "▫️ /add_users — Начать добавление пользователей\n"
+        "▫️ /stop — Остановить текущий процесс\n"
+        "▫️ /status — Проверить статус операции\n"
+        "▫️ /stats — Посмотреть статистику\n"
+        "▫️ /preview — Предпросмотр загруженного файла\n"
+        "▫️ /settings — Настройки и параметры\n"
+        "▫️ /help — Подробная инструкция\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "💡 <b>Совет:</b> Начните с небольшого файла, чтобы протестировать работу!",
+        parse_mode='HTML',
         reply_markup=keyboard
     )
 
@@ -183,7 +216,13 @@ async def handle_file(msg: Message):
     doc = msg.document
     
     if not (doc.file_name.endswith('.txt') or doc.file_name.endswith('.csv')):
-        await msg.answer("❌ Поддерживаются только форматы .txt или .csv")
+        await msg.answer(
+            "❌ <b>Неподдерживаемый формат файла!</b>\n\n"
+            "📁 Пожалуйста, отправьте файл в формате:\n"
+            "▫️ .txt (построчно)\n"
+            "▫️ .csv (с заголовками)",
+            parse_mode='HTML'
+        )
         return
     
     Path('downloads').mkdir(exist_ok=True)
@@ -193,69 +232,93 @@ async def handle_file(msg: Message):
     uploaded_files[msg.chat.id] = file_path
     users = parse_file(file_path)
     
-    # Show file info with inline buttons
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="👀 Просмотр (10 строк)", callback_data="preview_10")],
         [InlineKeyboardButton(text="🚀 Начать добавление", callback_data="start_adding")]
     ])
     
     await msg.answer(
-        f"✅ *Файл загружен:* `{doc.file_name}`\n"
-        f"👥 *Пользователей найдено:* {len(users)}\n"
-        f"📏 *Размер файла:* {doc.file_size / 1024:.1f} KB\n\n"
-        f"Используйте /add\\_users для начала",
-        parse_mode='Markdown',
+        f"✅ <b>Файл успешно загружен и обработан!</b>\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"📄 <b>Название:</b> <code>{doc.file_name}</code>\n"
+        f"👥 <b>Найдено пользователей:</b> <b>{len(users)}</b>\n"
+        f"📦 <b>Размер файла:</b> {doc.file_size / 1024:.1f} KB\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"🎯 Готово к работе! Используйте /add_users для запуска\n"
+        f"👁 Или нажмите кнопку ниже для предпросмотра",
+        parse_mode='HTML',
         reply_markup=keyboard
     )
     log.info(f"Загружен {doc.file_name} в чат {msg.chat.id}")
 
 @dp.message(Command('preview'))
 async def preview_file(msg: Message):
-    """Preview first 10 users from uploaded file"""
     chat_id = msg.chat.id
     
     if chat_id not in uploaded_files:
-        await msg.answer("❌ Сначала загрузите файл с пользователями")
+        await msg.answer(
+            "❌ <b>Файл не найден!</b>\n\n"
+            "📤 Сначала загрузите файл с пользователями\n"
+            "💡 Поддерживаемые форматы: .txt, .csv",
+            parse_mode='HTML'
+        )
         return
     
     users = parse_file(uploaded_files[chat_id])
     preview_list = users[:10]
     
-    preview_text = "👀 *Предпросмотр файла (первые 10):*\n\n"
+    preview_text = "👀 <b>Предпросмотр загруженного файла</b>\n\n━━━━━━━━━━━━━━━━━━━━\n\n"
+    
     for i, user in enumerate(preview_list, 1):
-        preview_text += f"{i}. `{user}`\n"
+        preview_text += f"{i}. <code>{user}</code>\n"
     
     if len(users) > 10:
-        preview_text += f"\n... и ещё {len(users) - 10} пользователей"
+        preview_text += f"\n━━━━━━━━━━━━━━━━━━━━\n📋 ... и ещё <b>{len(users) - 10}</b> пользователей"
     
-    await msg.answer(preview_text, parse_mode='Markdown')
+    preview_text += f"\n\n📊 <b>Всего в файле:</b> {len(users)} пользователей"
+    
+    await msg.answer(preview_text, parse_mode='HTML')
 
 @dp.message(Command('status'))
 async def check_status(msg: Message):
-    """Check current operation status"""
     chat_id = msg.chat.id
     
     if is_running.get(chat_id):
         await msg.answer(
-            "⚙️ *Статус:* Выполняется\n"
-            "🔄 Добавление пользователей в процессе...\n\n"
-            "Используйте /stop для остановки",
-            parse_mode='Markdown'
+            "⚙️ <b>СТАТУС СИСТЕМЫ</b>\n\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "🟢 <b>Состояние:</b> Активно\n"
+            "🔄 <b>Операция:</b> Добавление пользователей\n"
+            "⚡️ <b>Процесс:</b> Выполняется...\n"
+            "━━━━━━━━━━━━━━━━━━━━\n\n"
+            "🛑 Используйте /stop для остановки",
+            parse_mode='HTML'
         )
     else:
         await msg.answer(
-            "💤 *Статус:* Не активен\n"
-            "Нет активных операций",
-            parse_mode='Markdown'
+            "⚙️ <b>СТАТУС СИСТЕМЫ</b>\n\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "⚪️ <b>Состояние:</b> Неактивно\n"
+            "💤 <b>Операция:</b> Нет активных процессов\n"
+            "📊 <b>Готовность:</b> Ожидание команд\n"
+            "━━━━━━━━━━━━━━━━━━━━\n\n"
+            "💡 Используйте /add_users для запуска",
+            parse_mode='HTML'
         )
 
 @dp.message(Command('stats'))
 async def show_stats(msg: Message):
-    """Show statistics from last operation"""
     chat_id = msg.chat.id
     
     if chat_id not in stats_history:
-        await msg.answer("📊 История операций пуста\n\nВыполните /add_users для начала")
+        await msg.answer(
+            "📊 <b>История операций пуста</b>\n\n"
+            "━━━━━━━━━━━━━━━━━━━━\n\n"
+            "ℹ️ Статистика пока не собрана\n"
+            "🚀 Выполните /add_users для начала работы\n"
+            "📈 После завершения здесь появится детальная статистика",
+            parse_mode='HTML'
+        )
         return
     
     history = stats_history[chat_id]
@@ -263,59 +326,121 @@ async def show_stats(msg: Message):
     
     success_rate = (stats['success'] / history['processed'] * 100) if history['processed'] > 0 else 0
     
-    report = f"""📊 *Последняя операция*
+    report = f"""
+📊 <b>ДЕТАЛЬНАЯ СТАТИСТИКА</b>
 
-📅 Дата: `{history['date']}`
-⏱ Длительность: {int(history['duration'] // 60)}м {int(history['duration'] % 60)}с
+━━━━━━━━━━━━━━━━━━━━
+⏰ <b>ИНФОРМАЦИЯ О СЕАНСЕ</b>
+━━━━━━━━━━━━━━━━━━━━
 
-✅ Успешно: {stats['success']} ({success_rate:.1f}%)
-⏳ FloodWait: {stats['flood']}
-🔒 Приватность: {stats['privacy']}
-👤 Не в контактах: {stats['not_contact']}
-📊 Много групп: {stats['too_many_groups']}
-🚫 Забанены: {stats['banned']}
-❌ Ошибки: {stats['error']}
+📅 <b>Дата:</b> <code>{history['date']}</code>
+⏱ <b>Продолжительность:</b> {int(history['duration'] // 60)}м {int(history['duration'] % 60)}с
+⚡️ <b>Скорость:</b> {stats['success'] / (history['duration'] / 60):.1f} польз/мин
 
-📈 Всего обработано: {history['processed']}/{history['total']}"""
+━━━━━━━━━━━━━━━━━━━━
+📈 <b>РЕЗУЛЬТАТЫ ОБРАБОТКИ</b>
+━━━━━━━━━━━━━━━━━━━━
+
+✅ <b>Успешно добавлено:</b> {stats['success']} <i>({success_rate:.1f}%)</i>
+⏳ <b>FloodWait:</b> {stats['flood']}
+🔒 <b>Приватность:</b> {stats['privacy']}
+👤 <b>Не в контактах:</b> {stats['not_contact']}
+📊 <b>Превышен лимит групп:</b> {stats['too_many_groups']}
+🚫 <b>Заблокированы:</b> {stats['banned']}
+❌ <b>Другие ошибки:</b> {stats['error']}
+
+━━━━━━━━━━━━━━━━━━━━
+📋 <b>ИТОГО</b>
+━━━━━━━━━━━━━━━━━━━━
+
+👥 Обработано: <b>{history['processed']}</b> из {history['total']}
+📊 Эффективность: <b>{success_rate:.1f}%</b>
+"""
     
-    await msg.answer(report, parse_mode='Markdown')
+    await msg.answer(report, parse_mode='HTML')
 
 @dp.message(Command('settings'))
 async def show_settings(msg: Message):
-    """Show current bot settings"""
-    settings_text = f"""⚙️ *Текущие настройки*
+    settings_text = f"""
+⚙️ <b>ТЕКУЩИЕ НАСТРОЙКИ СИСТЕМЫ</b>
 
-⏱ Задержка между добавлениями: `{DELAY_BETWEEN}` сек
-📦 Размер пакета: `{BATCH_SIZE}` пользователей
-⏳ Задержка между пакетами: `{DELAY_BATCH}` сек
+━━━━━━━━━━━━━━━━━━━━
+⏱ <b>ПАРАМЕТРЫ ЗАДЕРЖЕК</b>
+━━━━━━━━━━━━━━━━━━━━
 
-💡 *Рекомендации:*
-• Увеличьте задержки при PeerFlood
-• Уменьшайте размер пакета для безопасности
-• Не добавляйте больше 50 пользователей в день"""
+▫️ Между добавлениями: <code>{DELAY_BETWEEN}</code> сек
+▫️ Между пакетами: <code>{DELAY_BATCH}</code> сек
+▫️ Размер пакета: <code>{BATCH_SIZE}</code> пользователей
+
+━━━━━━━━━━━━━━━━━━━━
+💡 <b>РЕКОМЕНДАЦИИ</b>
+━━━━━━━━━━━━━━━━━━━━
+
+1️⃣ При получении PeerFlood увеличьте задержки в 2 раза
+2️⃣ Для максимальной безопасности уменьшите размер пакета
+3️⃣ Не добавляйте более 50 пользователей в день
+4️⃣ Делайте перерывы между сеансами минимум 6 часов
+5️⃣ Следите за показателем успешности (должен быть >50%)
+
+━━━━━━━━━━━━━━━━━━━━
+
+🔐 <b>Безопасность — наш приоритет!</b>
+"""
     
-    await msg.answer(settings_text, parse_mode='Markdown')
+    await msg.answer(settings_text, parse_mode='HTML')
 
 @dp.message(Command('add_users'))
 async def add_users(msg: Message):
     chat_id = msg.chat.id
     
     if is_running.get(chat_id):
-        await msg.answer("⏳ Процесс уже запущен...\n\nИспользуйте /stop для остановки")
+        await msg.answer(
+            "⚠️ <b>Процесс уже запущен!</b>\n\n"
+            "━━━━━━━━━━━━━━━━━━━━\n\n"
+            "⏳ Операция выполняется в данный момент\n"
+            "🔄 Дождитесь завершения текущего процесса\n\n"
+            "🛑 Или используйте /stop для остановки",
+            parse_mode='HTML'
+        )
         return
     
     if chat_id not in uploaded_files:
-        await msg.answer("❌ Сначала загрузите файл с пользователями (users.txt или users.csv)")
+        await msg.answer(
+            "❌ <b>Файл не загружен!</b>\n\n"
+            "━━━━━━━━━━━━━━━━━━━━\n\n"
+            "📤 <b>Шаг 1:</b> Загрузите файл с пользователями\n"
+            "📋 <b>Формат:</b> users.txt или users.csv\n\n"
+            "💡 <b>Пример формата TXT:</b>\n"
+            "<code>username1\nusername2\nuser_id_123</code>\n\n"
+            "💡 <b>Пример формата CSV:</b>\n"
+            "<code>username,user_id\nuser1,123\nuser2,456</code>",
+            parse_mode='HTML'
+        )
         return
     
     if msg.chat.type not in ['group', 'supergroup']:
-        await msg.answer("❌ Бот работает только в группах и супергруппах")
+        await msg.answer(
+            "❌ <b>Неверный тип чата!</b>\n\n"
+            "━━━━━━━━━━━━━━━━━━━━\n\n"
+            "⚠️ Бот работает только в группах и супергруппах\n"
+            "👥 Добавьте бота в нужную группу\n"
+            "🔐 Выдайте права администратора\n"
+            "🚀 Запустите команду снова",
+            parse_mode='HTML'
+        )
         return
     
     users = parse_file(uploaded_files[chat_id])
     
     if not users:
-        await msg.answer("❌ Файл пустой или не содержит пользователей")
+        await msg.answer(
+            "❌ <b>Файл пустой!</b>\n\n"
+            "━━━━━━━━━━━━━━━━━━━━\n\n"
+            "📭 Файл не содержит пользователей\n"
+            "📤 Загрузите корректный файл\n"
+            "✅ Убедитесь в правильности формата",
+            parse_mode='HTML'
+        )
         return
     
     is_running[chat_id] = True
@@ -323,13 +448,19 @@ async def add_users(msg: Message):
     estimated_time = len(users) * DELAY_BETWEEN / 60
     
     await msg.answer(
-        f"🚀 *Начинаю добавление пользователей*\n\n"
-        f"👥 Всего пользователей: `{len(users)}`\n"
-        f"⏱ Задержка: `{DELAY_BETWEEN}` сек между добавлениями\n"
-        f"📦 Пакетная обработка: каждые `{BATCH_SIZE}` = `{DELAY_BATCH}` сек паузы\n"
-        f"⏰ Примерное время: ~{int(estimated_time)} минут\n\n"
-        f"Используйте /stop для остановки",
-        parse_mode='Markdown'
+        f"🚀 <b>ЗАПУСК ПРОЦЕССА ДОБАВЛЕНИЯ</b>\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"📊 <b>ПАРАМЕТРЫ ОПЕРАЦИИ</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"👥 <b>Всего пользователей:</b> <code>{len(users)}</code>\n"
+        f"⏱ <b>Задержка:</b> <code>{DELAY_BETWEEN}</code> сек между добавлениями\n"
+        f"📦 <b>Пакетная обработка:</b> каждые <code>{BATCH_SIZE}</code> пользователей\n"
+        f"⏸ <b>Пауза между пакетами:</b> <code>{DELAY_BATCH}</code> сек\n"
+        f"⏰ <b>Ориентировочное время:</b> ~<b>{int(estimated_time)}</b> минут\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"⚡️ Процесс запущен! Следите за обновлениями...\n"
+        f"🛑 Для остановки используйте /stop",
+        parse_mode='HTML'
     )
     
     log.info(f"Запуск добавления в чате {chat_id}, пользователей: {len(users)}")
@@ -342,60 +473,100 @@ async def stop(msg: Message):
     if is_running.get(chat_id):
         is_running[chat_id] = False
         await msg.answer(
-            "🛑 *Остановка процесса...*\n\n"
-            "Текущая операция будет завершена, затем процесс остановится.\n"
-            "Используйте /stats для просмотра результатов.",
-            parse_mode='Markdown'
+            "🛑 <b>ОСТАНОВКА ПРОЦЕССА</b>\n\n"
+            "━━━━━━━━━━━━━━━━━━━━\n\n"
+            "⏳ Завершение текущей операции...\n"
+            "💾 Сохранение промежуточных результатов...\n"
+            "📊 Подготовка статистики...\n\n"
+            "━━━━━━━━━━━━━━━━━━━━\n\n"
+            "✅ Процесс будет остановлен через несколько секунд\n"
+            "📈 Используйте /stats для просмотра результатов",
+            parse_mode='HTML'
         )
         log.info(f"Остановка процесса в чате {chat_id}")
     else:
-        await msg.answer("ℹ️ Нет активных процессов для остановки")
+        await msg.answer(
+            "ℹ️ <b>Нет активных процессов</b>\n\n"
+            "━━━━━━━━━━━━━━━━━━━━\n\n"
+            "💤 В данный момент ничего не выполняется\n"
+            "🚀 Используйте /add_users для запуска\n"
+            "📊 Или /status для проверки состояния",
+            parse_mode='HTML'
+        )
 
 @dp.message(Command('help'))
 async def help_command(msg: Message):
-    """Detailed help information"""
-    help_text = """📖 *Подробная справка*
+    help_text = """
+📖 <b>ПОДРОБНАЯ ИНСТРУКЦИЯ</b>
 
-*Основные команды:*
-/start - Главное меню
-/add\\_users - Запустить добавление
-/stop - Остановить процесс
-/status - Текущий статус
-/stats - Статистика операций
-/preview - Просмотр загруженного файла
-/settings - Настройки бота
-/help - Эта справка
+━━━━━━━━━━━━━━━━━━━━
+🎯 <b>ОСНОВНЫЕ КОМАНДЫ</b>
+━━━━━━━━━━━━━━━━━━━━
 
-*Форматы файлов:*
+/start — Главное меню и приветствие
+/add_users — Запустить процесс добавления
+/stop — Остановить текущую операцию
+/status — Проверить статус системы
+/stats — Детальная статистика операций
+/preview — Просмотр загруженного файла
+/settings — Настройки и параметры
+/help — Показать эту справку
 
-*TXT файл:*
-```
-username1
+━━━━━━━━━━━━━━━━━━━━
+📁 <b>ПОДДЕРЖИВАЕМЫЕ ФОРМАТЫ</b>
+━━━━━━━━━━━━━━━━━━━━
+
+<b>📄 TXT файл (построчно):</b>
+<code>username1
 username2
 user_id_123
-```
+@username3</code>
 
-*CSV файл:*
-```
-username,user_id,id
+<b>📊 CSV файл (с заголовками):</b>
+<code>username,user_id,id
 user1,123,
 user2,,456
-```
+@user3,789,</code>
 
-*Коды ошибок:*
-🔒 Приватность - Настройки приватности
-👤 Не в контактах - Нет в контактах
-📊 Много групп - Лимит групп
-🚫 Забанены - Пользователь забанен
-⏳ FloodWait - Ограничение Telegram
+━━━━━━━━━━━━━━━━━━━━
+⚠️ <b>КОДЫ ОШИБОК</b>
+━━━━━━━━━━━━━━━━━━━━
 
-*Советы:*
-• Добавляйте не более 50 пользователей в день
-• При PeerFlood подождите 24 часа
-• Используйте задержки 60+ секунд
-• Добавьте бота администратором группы"""
+🔒 <b>Приватность</b> — Настройки конфиденциальности пользователя
+👤 <b>Не в контактах</b> — Пользователь отсутствует в контактах
+📊 <b>Много групп</b> — Превышен лимит групп у пользователя
+🚫 <b>Забанены</b> — Пользователь заблокирован в группе
+⏳ <b>FloodWait</b> — Временное ограничение Telegram
+❌ <b>Ошибка</b> — Другие технические проблемы
+
+━━━━━━━━━━━━━━━━━━━━
+💡 <b>СОВЕТЫ ПО ИСПОЛЬЗОВАНИЮ</b>
+━━━━━━━━━━━━━━━━━━━━
+
+1️⃣ Не добавляйте более 50 пользователей в день
+2️⃣ При получении PeerFlood подождите 24 часа
+3️⃣ Используйте задержки минимум 60 секунд
+4️⃣ Обязательно выдайте боту права администратора
+5️⃣ Начните с тестового файла из 5-10 пользователей
+6️⃣ Регулярно проверяйте статистику командой /stats
+7️⃣ Делайте перерывы между сеансами
+
+━━━━━━━━━━━━━━━━━━━━
+🔐 <b>БЕЗОПАСНОСТЬ</b>
+━━━━━━━━━━━━━━━━━━━━
+
+▫️ Бот следует официальным лимитам Telegram
+▫️ Автоматическая обработка FloodWait
+▫️ Интеллектуальная система пауз
+▫️ Детальное логирование всех операций
+
+━━━━━━━━━━━━━━━━━━━━
+
+❓ <b>Остались вопросы?</b> 
+Используйте /status для проверки состояния!
+"""
     
-    await msg.answer(help_text, parse_mode='Markdown')
+    await msg.answer(help_text, parse_mode='HTML')
 
 async def main():
     log.info("🚀 Запуск бота...")
