@@ -1,4 +1,4 @@
-
+import os
 import logging
 import asyncio
 import csv
@@ -16,8 +16,6 @@ from pyrogram.errors import (
     FloodWait, UserPrivacyRestricted, PeerFlood,
     UserNotMutualContact, UserChannelsTooMuch, UserBannedInChannel
 )
-
-import os
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -248,9 +246,7 @@ async def handle_file(msg: Message):
         f"📄 <b>Название:</b> <code>{doc.file_name}</code>\n"
         f"👥 <b>Найдено пользователей:</b> <b>{len(users)}</b>\n"
         f"📦 <b>Размер файла:</b> {doc.file_size / 1024:.1f} KB\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"🎯 Готово к работе! Используйте /add_users для запуска\n"
-        f"👁 Или нажмите кнопку ниже для предпросмотра",
+        f"━━━━━━━━━━━━━━━━━━━━\n\n",
         parse_mode='HTML',
         reply_markup=keyboard
     )
