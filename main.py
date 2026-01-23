@@ -17,6 +17,10 @@ from pyrogram.errors import (
     UserNotMutualContact, UserChannelsTooMuch, UserBannedInChannel
 )
 from dotenv import load_dotenv
+import asyncio
+import logging
+from contextlib import suppress
+
 
 load_dotenv()
 
@@ -569,12 +573,31 @@ user2,,456
     
     await msg.answer(help_text, parse_mode='HTML')
 
+
 async def main():
     log.info("🚀 Запуск бота...")
-    await app.start()
-    log.info("✅ Pyrogram клиент готов")
-    log.info("✅ Бот готов к работе")
-    await dp.start_polling(bot)
+
+    try:
+        # Запуск Pyrogram
+        await app.start()
+        log.info("✅ Pyrogram клиент готов")
+
+        # Запуск Aiogram
+        await dp.start_polling(bot)
+
+    except (KeyboardInterrupt, SystemExit):
+        log.warning("⛔ Остановка по сигналу")
+
+    except Exception as e:
+        log.exception("❌ Критическая ошибка", exc_info=e)
+
+    finally:
+        # Корректное завершение
+        with suppress(Exception):
+            await bot.session.close()
+            await app.stop()
+
+        log.info("🛑 Бот корректно остановлен")
 
 if __name__ == '__main__':
     asyncio.run(main())
